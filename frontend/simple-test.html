@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Recording Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        button { padding: 20px; font-size: 18px; margin: 10px; }
+        .recording { background-color: red; color: white; }
+        .status { margin: 20px; padding: 10px; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h2>Recording Test - Poco X7 Pro</h2>
+    <button id="recordBtn">Hold to Record</button>
+    <div class="status" id="status">Ready</div>
+    <div id="duration">0 seconds</div>
+    <audio id="audioPlayer" controls style="width: 100%; margin-top: 20px;"></audio>
+    
+    <script>
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let stream = null;
+        let startTime = null;
+        let timerInterval = null;
+        
+        const recordBtn = document.getElementById('recordBtn');
+        const statusDiv = document.getElementById('status');
+        const durationDiv = document.getElementById('duration');
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Handle both mouse and touch events
+        recordBtn.addEventListener('mousedown', startRecording);
+        recordBtn.addEventListener('mouseup', stopRecording);
+        recordBtn.addEventListener('mouseleave', stopRecording);
+        recordBtn.addEventListener('touchstart', startRecording);
+        recordBtn.addEventListener('touchend', stopRecording);
+        
+        async function startRecording(e) {
+            e.preventDefault();
+            
+            try {
+                statusDiv.innerHTML = 'Requesting microphone permission...';
+                
+                // Request microphone access
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 44100,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    } 
+                });
+                
+                statusDiv.innerHTML = 'Microphone granted. Starting recording...';
+                
+                // Check supported MIME types
+                let mimeType = '';
+                const types = ['audio/webm', 'audio/mp4', 'audio/wav'];
+                for (const type of types) {
+                    if (MediaRecorder.isTypeSupported(type)) {
+                        mimeType = type;
+                        console.log('Using MIME type:', type);
+                        break;
+                    }
+                }
+                
+                // Create media recorder
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: mimeType,
+                    audioBitsPerSecond: 128000
+                });
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        console.log('Chunk size:', event.data.size);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const duration = (Date.now() - startTime) / 1000;
+                    durationDiv.innerHTML = `${duration.toFixed(1)} seconds recorded`;
+                    
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    audioPlayer.src = audioUrl;
+                    
+                    statusDiv.innerHTML = `Recording saved! Size: ${(audioBlob.size/1024).toFixed(1)} KB`;
+                    console.log('Final blob size:', audioBlob.size);
+                    
+                    // Clean up
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                        stream = null;
+                    }
+                    recordBtn.classList.remove('recording');
+                };
+                
+                // Start recording
+                mediaRecorder.start(100);
+                startTime = Date.now();
+                recordBtn.classList.add('recording');
+                statusDiv.innerHTML = 'Recording... Release button to stop';
+                
+                // Update timer
+                if (timerInterval) clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    if (startTime) {
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        durationDiv.innerHTML = `${elapsed.toFixed(1)} seconds`;
+                    }
+                }, 100);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `Error: ${error.message}`;
+                recordBtn.classList.remove('recording');
+            }
+        }
+        
+        function stopRecording(e) {
+            e.preventDefault();
+            
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                if (timerInterval) clearInterval(timerInterval);
+                statusDiv.innerHTML = 'Processing recording...';
+            }
+        }
+    </script>
+</body>
+</html>

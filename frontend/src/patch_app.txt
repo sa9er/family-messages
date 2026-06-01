@@ -1,0 +1,1 @@
+Find the AudioRecorder component in App.tsx and replace the entire component with:

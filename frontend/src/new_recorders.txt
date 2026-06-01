@@ -1,0 +1,275 @@
+const AudioRecorder = ({ onSend }: { onSend: (blob: Blob) => void }) => {
+  const [recording, setRecording] = useState(false);
+  const [status, setStatus] = useState('');
+  const [duration, setDuration] = useState(0);
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const startTimeRef = useRef(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  const cleanup = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    mediaRecorder.current = null;
+    chunksRef.current = [];
+    setRecording(false);
+    setDuration(0);
+  };
+
+  const startRecording = async () => {
+    if (mediaRecorder.current) return;
+    try {
+      setStatus('Requesting microphone...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      
+      // Try to get supported mime type
+      let mimeType = '';
+      const types = ['audio/webm', 'audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg'];
+      for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          console.log('Using MIME type:', type);
+          break;
+        }
+      }
+      
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorder.current = recorder;
+      chunksRef.current = [];
+      startTimeRef.current = Date.now();
+      
+      // Update duration display
+      intervalRef.current = setInterval(() => {
+        if (recording) {
+          setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }
+      }, 100);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          console.log(`Chunk ${chunksRef.current.length}: ${e.data.size} bytes`);
+        }
+      };
+
+      recorder.onstop = () => {
+        clearInterval(intervalRef.current);
+        const totalDuration = (Date.now() - startTimeRef.current) / 1000;
+        console.log(`Total recording time: ${totalDuration}s`);
+        console.log(`Total chunks: ${chunksRef.current.length}`);
+        
+        if (chunksRef.current.length === 0) {
+          setStatus('❌ No data captured!');
+          cleanup();
+          return;
+        }
+        
+        const totalSize = chunksRef.current.reduce((sum, chunk) => sum + chunk.size, 0);
+        console.log(`Total size: ${totalSize} bytes`);
+        
+        if (totalSize < 5000) {
+          setStatus(`❌ File too small (${totalSize} bytes). Record longer!`);
+          cleanup();
+          return;
+        }
+        
+        // Create blob with specific type
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        
+        // Test if blob is valid
+        const testUrl = URL.createObjectURL(blob);
+        const testAudio = new Audio(testUrl);
+        testAudio.onloadedmetadata = () => {
+          console.log(`Audio duration from metadata: ${testAudio.duration}s`);
+          URL.revokeObjectURL(testUrl);
+          
+          if (testAudio.duration < 0.5) {
+            setStatus(`⚠️ Audio duration is ${testAudio.duration}s - too short!`);
+          } else {
+            setStatus(`✅ Success! ${totalDuration.toFixed(1)}s recorded, ${(totalSize/1024).toFixed(1)}KB`);
+            onSend(blob);
+          }
+          cleanup();
+        };
+        testAudio.onerror = () => {
+          console.error('Audio playback test failed');
+          setStatus('❌ Recorded data is corrupted!');
+          cleanup();
+        };
+      };
+
+      recorder.start(500); // Collect data every 500ms
+      setRecording(true);
+      setStatus('🔴 Recording...');
+    } catch (err: any) {
+      setStatus(`❌ Error: ${err.message}`);
+      cleanup();
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+      mediaRecorder.current.stop();
+    }
+  };
+
+  return (
+    <div>
+      <button
+        onMouseDown={startRecording}
+        onMouseUp={stopRecording}
+        onMouseLeave={stopRecording}
+        className={`record-btn ${recording ? 'recording' : ''}`}
+      >
+        {recording ? `🔴 Recording... ${duration}s` : '🎤 Hold to Record (Audio)'}
+      </button>
+      {status && <div style={{color: '#aaa', fontSize: '0.8rem', marginTop: '0.5rem', textAlign: 'center'}}>{status}</div>}
+    </div>
+  );
+};
+
+const VideoRecorder = ({ onSend }: { onSend: (blob: Blob) => void }) => {
+  const [recording, setRecording] = useState(false);
+  const [status, setStatus] = useState('');
+  const [duration, setDuration] = useState(0);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const startTimeRef = useRef(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  const cleanup = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      setStream(null);
+    }
+    mediaRecorder.current = null;
+    chunksRef.current = [];
+    setRecording(false);
+    setDuration(0);
+  };
+
+  const startRecording = async () => {
+    try {
+      setStatus('Requesting camera...');
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { width: { ideal: 640 }, height: { ideal: 480 } }, 
+        audio: true 
+      });
+      setStream(mediaStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+      
+      let mimeType = '';
+      const types = ['video/webm', 'video/webm;codecs=vp8,opus', 'video/mp4'];
+      for (const type of types) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          console.log('Using video MIME type:', type);
+          break;
+        }
+      }
+      
+      const recorder = new MediaRecorder(mediaStream, { mimeType });
+      mediaRecorder.current = recorder;
+      chunksRef.current = [];
+      startTimeRef.current = Date.now();
+      
+      intervalRef.current = setInterval(() => {
+        if (recording) {
+          setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }
+      }, 100);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          console.log(`Video chunk ${chunksRef.current.length}: ${e.data.size} bytes`);
+        }
+      };
+
+      recorder.onstop = () => {
+        clearInterval(intervalRef.current);
+        const totalDuration = (Date.now() - startTimeRef.current) / 1000;
+        console.log(`Video recording time: ${totalDuration}s`);
+        
+        if (chunksRef.current.length === 0) {
+          setStatus('❌ No video data captured!');
+          cleanup();
+          return;
+        }
+        
+        const totalSize = chunksRef.current.reduce((sum, chunk) => sum + chunk.size, 0);
+        console.log(`Total video size: ${totalSize} bytes`);
+        
+        if (totalSize < 10000) {
+          setStatus(`❌ Video too small (${totalSize} bytes). Record longer!`);
+          cleanup();
+          return;
+        }
+        
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        
+        // Test video blob
+        const testUrl = URL.createObjectURL(blob);
+        const testVideo = document.createElement('video');
+        testVideo.onloadedmetadata = () => {
+          console.log(`Video duration from metadata: ${testVideo.duration}s`);
+          URL.revokeObjectURL(testUrl);
+          setStatus(`✅ Video recorded: ${totalDuration.toFixed(1)}s, ${(totalSize/1024).toFixed(1)}KB`);
+          onSend(blob);
+          cleanup();
+        };
+        testVideo.onerror = () => {
+          console.error('Video test failed');
+          setStatus('❌ Video data is corrupted!');
+          cleanup();
+        };
+        testVideo.src = testUrl;
+      };
+
+      recorder.start(500);
+      setRecording(true);
+      setStatus('🔴 Recording video...');
+    } catch (err: any) {
+      setStatus(`❌ Camera error: ${err.message}`);
+      cleanup();
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+      mediaRecorder.current.stop();
+    }
+  };
+
+  return (
+    <div className="video-recorder">
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        className="preview"
+        style={{ display: stream ? 'block' : 'none' }}
+      />
+      <button
+        onMouseDown={startRecording}
+        onMouseUp={stopRecording}
+        onMouseLeave={stopRecording}
+        className={`record-btn ${recording ? 'recording' : ''}`}
+      >
+        {recording ? `🔴 Recording Video... ${duration}s` : '📹 Hold to Record Video'}
+      </button>
+      {status && <div style={{color: '#aaa', fontSize: '0.8rem', marginTop: '0.5rem', textAlign: 'center'}}>{status}</div>}
+    </div>
+  );
+};

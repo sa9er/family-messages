@@ -1,0 +1,374 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.app {
+  max-width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #1a1a2e;
+}
+
+/* Home Screen */
+.home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  padding-top: calc(2rem + env(safe-area-inset-top));
+  text-align: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.home h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: white;
+}
+
+.home p {
+  color: rgba(255,255,255,0.9);
+  margin-bottom: 2rem;
+}
+
+.home button {
+  width: 100%;
+  max-width: 300px;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  border: none;
+  border-radius: 12px;
+  background: white;
+  color: #667eea;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+/* Screens */
+.screen {
+  padding: 1rem;
+  padding-top: calc(1rem + env(safe-area-inset-top));
+  height: 100%;
+  background: #1a1a2e;
+  color: #eee;
+}
+
+.screen button:first-child {
+  background: none;
+  border: none;
+  color: #667eea;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+.screen h2 {
+  margin-bottom: 1.5rem;
+  color: #fff;
+}
+
+.screen input {
+  width: 100%;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  border: 1px solid #444;
+  border-radius: 12px;
+  font-size: 1rem;
+  background: #16213e;
+  color: #eee;
+}
+
+.screen input::placeholder {
+  color: #888;
+}
+
+.screen button:last-child {
+  width: 100%;
+  padding: 1rem;
+  margin-top: 1rem;
+  border: none;
+  border-radius: 12px;
+  background: #667eea;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Chat Screen */
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: #1a1a2e;
+  padding-top: env(safe-area-inset-top);
+}
+
+header {
+  background: #667eea;
+  color: white;
+  padding: 0.75rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  min-height: 56px;
+  z-index: 10;
+  flex-shrink: 0;
+  margin-top: env(safe-area-inset-top);
+}
+
+header h2 {
+  font-size: 1.1rem;
+  color: white;
+  margin: 0;
+  font-weight: 600;
+}
+
+.code {
+  font-size: 0.75rem;
+  opacity: 0.9;
+  background: rgba(255,255,255,0.2);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  color: white;
+  display: inline-block;
+  margin-top: 0.25rem;
+}
+
+.leave-btn {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column-reverse;
+  background: #1a1a2e;
+  min-height: 0;
+}
+
+.empty-state {
+  text-align: center;
+  color: #888;
+  padding: 3rem 1rem;
+  font-size: 1.1rem;
+}
+
+.message {
+  max-width: 80%;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border-radius: 18px;
+  background: #16213e;
+  color: #eee;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  align-self: flex-start;
+}
+
+.message.own {
+  align-self: flex-end;
+  background: #667eea;
+  color: white;
+}
+
+.sender {
+  font-size: 0.75rem;
+  color: #667eea;
+  margin-bottom: 0.25rem;
+  display: block;
+  font-weight: 600;
+}
+
+.message.own .sender {
+  color: rgba(255,255,255,0.8);
+}
+
+.audio-message {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem;
+}
+
+.audio-message button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: #667eea;
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.message.own .audio-message button {
+  background: white;
+  color: #667eea;
+}
+
+.waveform {
+  flex: 1;
+  color: #667eea;
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+}
+
+.message.own .waveform {
+  color: rgba(255,255,255,0.8);
+}
+
+.video-message {
+  max-width: 100%;
+  border-radius: 12px;
+  display: block;
+}
+
+.time {
+  font-size: 0.7rem;
+  color: #888;
+  display: block;
+  margin-top: 0.5rem;
+  text-align: right;
+}
+
+.message.own .time {
+  color: rgba(255,255,255,0.7);
+}
+
+/* Composer */
+.composer {
+  background: #16213e;
+  border-top: 1px solid #333;
+  padding: 1rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.2);
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.tabs button {
+  flex: 1;
+  padding: 0.75rem;
+  border: none;
+  background: #1a1a2e;
+  color: #888;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tabs button.active {
+  background: #667eea;
+  color: white;
+}
+
+.record-btn {
+  width: 100%;
+  padding: 1.25rem;
+  border: none;
+  border-radius: 50px;
+  background: #e94560;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.2s;
+  box-shadow: 0 4px 15px rgba(233,69,96,0.3);
+}
+
+.record-btn.recording {
+  transform: scale(0.95);
+  background: #c73e54;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.video-recorder .preview {
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 0.5rem;
+  background: #333;
+}
+
+/* Scrollbar styling */
+.messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.messages::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 3px;
+}
+
+/* Mobile optimizations */
+@media (max-width: 480px) {
+  .home h1 {
+    font-size: 1.5rem;
+  }
+  
+  .message {
+    max-width: 90%;
+  }
+  
+  .record-btn {
+    padding: 1rem;
+    font-size: 1rem;
+  }
+}

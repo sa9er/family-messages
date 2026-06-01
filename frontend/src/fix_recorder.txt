@@ -1,0 +1,2 @@
+// In App.tsx, find the AudioRecorder component and replace startRecording function
+// Run these sed commands to fix the recording issues

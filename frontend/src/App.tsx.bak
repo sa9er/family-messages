@@ -1,0 +1,289 @@
+import { useState, useRef, useEffect } from 'react';
+
+const API_URL = 'http://localhost:3000';
+
+function App() {
+  const [familyId, setFamilyId] = useState(null);
+  const [memberId, setMemberId] = useState(null);
+  const [token, setToken] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [view, setView] = useState('home');
+  const [status, setStatus] = useState('');
+
+  const recordingRef = useRef(false);
+  const streamRef = useRef(null);
+  const contextRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  // Load messages when token and familyId are available
+  useEffect(() => {
+    if (token && familyId) {
+      fetchMessages();
+    }
+  }, [token, familyId]);
+
+  const fetchMessages = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/messages/family/${familyId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(data.messages || []);
+        setStatus(`Loaded ${data.messages?.length || 0} messages`);
+      }
+    } catch (error) {
+      console.error('Fetch messages error:', error);
+    }
+  };
+
+  const testBackend = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/family/create`, {
+        method: 'POST',
+        headers: { 'Content-Type':application/json' },
+        body: JSON.stringify({ name: 'test' })
+      });
+      const data = await response.json();
+      if (data.familyId) {
+        setStatus('Backend OK!');
+      } else {
+        setStatus('Backend response error');
+      }
+    } catch (error) {
+      setStatus('Backend error: ' + error.message);
+    }
+  };
+
+  const createFamily = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/family/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'My Family' })
+      });
+      const data = await response.json();
+      
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('familyId', data.familyId);
+        localStorage.setItem('memberId', data.memberId);
+        
+        setToken(data.token);
+        setFamilyId(data.familyId);
+        setMemberId(data.memberId);
+        setView('chat');
+        setStatus('Family created!');
+      } else {
+        setStatus('No token received');
+      }
+    } catch (error) {
+      setStatus('Create failed: ' + error.message);
+    }
+  };
+
+  const startRecording = async () => {
+    if (recordingRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      contextRef.current = new AudioContextClass();
+      const source = contextRef.current.createMediaStreamSource(stream);
+      const processor = contextRef.current.createScriptProcessor(4096, 1, 1);
+      chunksRef.current = [];
+      
+      processor.onaudioprocess = (event) => {
+        if (!recordingRef.current) return;
+        const inputData = event.inputBuffer.getChannelData(0);
+        const outputData = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          outputData[i] = Math.floor(inputData[i] * 32767);
+        }
+        chunksRef.current.push(outputData);
+      };
+      
+      source.connect(processor);
+      processor.connect(contextRef.current.destination);
+      recordingRef.current = true;
+      setStatus('Recording...');
+    } catch (error) {
+      setStatus('Microphone error: ' + error.message);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
+    
+    // Combine all chunks
+    let totalLength = 0;
+    for (const chunk of chunksRef.current) totalLength += chunk.length;
+    const combined = new Int16Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunksRef.current) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
+    
+    if (combined.length < 1000) {
+      setStatus('Recording too short');
+      cleanupRecording();
+      return;
+    }
+    
+    const sampleRate = contextRef.current?.sampleRate || 44100;
+    const wavBlob = createWavBlob(combined, sampleRate);
+    
+    const formData = new FormData();
+    formData.append('media', wavBlob, 'recording.wav');
+    formData.append('familyId', familyId);
+    formData.append('senderId', memberId);
+    formData.append('type', 'audio');
+    
+    try {
+      const response = await fetch(`${API_URL}/api/messages/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      if (response.ok) {
+        setStatus('Sent!');
+        await fetchMessages(); // Refresh message list
+      } else {
+        setStatus('Upload failed: ' + response.status);
+      }
+    } catch (error) {
+      setStatus('Upload error: ' + error.message);
+    }
+    
+    cleanupRecording();
+  };
+
+  const createWavBlob = (samples, sampleRate) => {
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+    const blockAlign = numChannels * bitsPerSample / 8;
+    const dataSize = samples.length * 2;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+    
+    // Write WAV header
+    const writeString = (offset, str) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitsPerSample, true);
+    writeString(36, 'data');
+    view.setUint32(40, dataSize, true);
+    
+    // Write audio data
+    for (let i = 0; i < samples.length; i++) {
+      view.setInt16(44 + i * 2, samples[i], true);
+    }
+    
+    return new Blob([buffer], { type: 'audio/wav' });
+  };
+
+  const cleanupRecording = () => {
+    if (contextRef.current) {
+      contextRef.current.close();
+      contextRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    recordingRef.current = false;
+  };
+
+  if (view === 'home') {
+    return (
+      <div style={{ padding: 20, textAlign: 'center' }}>
+        <h1>Family Messages</h1>
+        <button onClick={testBackend} style={{ margin: 10, padding: '10px 20px' }}>Test Backend</button>
+        <br />
+        <button onClick={createFamily} style={{ margin: 10, padding: '10px 20px' }}>Create Family</button>
+        <p>{status}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h2>Family Chat</h2>
+      <p>Status: {status}</p>
+      
+      <div style={{ 
+        height: 400, 
+        overflow: 'auto', 
+        border: '1px solid #ccc', 
+        marginBottom: 20, 
+        padding: 10,
+        borderRadius: 5
+      }}>
+        {messages.length === 0 && <p>No messages yet</p>}
+        {messages.map(msg => (
+          <div key={msg.id} style={{ 
+            textAlign: msg.senderId === memberId ? 'right' : 'left',
+            marginBottom: 10
+          }}>
+            <div style={{ 
+              display: 'inline-block',
+              background: msg.senderId === memberId ? '#007bff' : '#e0e0e0',
+              color: msg.senderId === memberId ? 'white' : 'black',
+              padding: 10,
+              borderRadius: 10,
+              maxWidth: '80%'
+            }}>
+              {msg.type === 'audio' && (
+                <audio controls src={`${API_URL}${msg.content}`} style={{ width: 200 }} />
+              )}
+              <div style={{ fontSize: 11, marginTop: 5 }}>
+                {new Date(msg.createdAt * 1000).toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      <div style={{ textAlign: 'center' }}>
+        <button
+          onMouseDown={startRecording}
+          onMouseUp={stopRecording}
+          onMouseLeave={stopRecording}
+          onTouchStart={e => { e.preventDefault(); startRecording(); }}
+          onTouchEnd={e => { e.preventDefault(); stopRecording(); }}
+          style={{
+            width: 100,
+            height: 100,
+            borderRadius: 50,
+            background: '#dc3545',
+            color: 'white',
+            border: 'none',
+            fontSize: 14,
+            touchAction: 'none'
+          }}
+        >
+          Hold to Record
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default App;

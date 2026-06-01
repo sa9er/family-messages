@@ -1,0 +1,60 @@
+Replace the sendMessage function in App.tsx with:
+
+const sendMessage = async (blob: Blob, type: 'audio' | 'video') => {
+  const currentFamily = familyRef.current;
+  const currentMemberId = memberIdRef.current;
+  
+  if (!currentFamily || !currentMemberId) {
+    setUploadStatus('Error: Not in a family');
+    return;
+  }
+
+  console.log(`Sending ${type}:`, {
+    size: blob.size,
+    type: blob.type,
+    familyId: currentFamily.id,
+    senderId: currentMemberId
+  });
+
+  setUploadStatus(`Uploading ${type}... (${(blob.size / 1024).toFixed(1)}KB)`);
+
+  const formData = new FormData();
+  formData.append('media', blob, `recording.${type === 'video' ? 'webm' : 'webm'}`);
+  formData.append('familyId', currentFamily.id);
+  formData.append('senderId', currentMemberId);
+  formData.append('type', type);
+
+  try {
+    const res = await fetch(`${API_URL}/api/messages/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${currentMemberId}` },
+      body: formData
+    });
+
+    if (!res.ok) {
+      const error = await res.text();
+      console.error('Upload failed:', error);
+      setUploadStatus(`Upload failed: ${error}`);
+      return;
+    }
+
+    const data = await res.json();
+    console.log('Upload success:', data);
+    setUploadStatus('Upload complete!');
+    socket?.emit('message:sent', { messageId: data.messageId });
+
+    setMessages(prev => [{
+      id: data.messageId,
+      senderId: currentMemberId,
+      type,
+      content: data.url,
+      thumbnailUrl: data.thumbnailUrl,
+      duration: data.duration,
+      createdAt: Date.now(),
+      seenBy: []
+    }, ...prev]);
+  } catch (err: any) {
+    console.error('Upload error:', err);
+    setUploadStatus(`Error: ${err.message}`);
+  }
+};

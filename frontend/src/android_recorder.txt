@@ -1,0 +1,340 @@
+// Add this Android-compatible AudioRecorder component
+// Replace the existing AudioRecorder with this:
+
+const AudioRecorder = ({ onSend }: { onSend: (blob: Blob) => void }) => {
+  const [recording, setRecording] = useState(false);
+  const [status, setStatus] = useState('');
+  const [duration, setDuration] = useState(0);
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const startTimeRef = useRef(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  const cleanup = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => {
+        if (t.readyState === 'live') t.stop();
+      });
+      streamRef.current = null;
+    }
+    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+      try { mediaRecorder.current.stop(); } catch(e) {}
+    }
+    mediaRecorder.current = null;
+    chunksRef.current = [];
+    setRecording(false);
+    setDuration(0);
+  };
+
+  const startRecording = async () => {
+    if (mediaRecorder.current) return;
+    try {
+      setStatus('Requesting microphone...');
+      
+      // Android-specific constraints
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+          channelCount: 1
+        } 
+      });
+      streamRef.current = stream;
+      
+      // Android works best with these MIME types
+      let mimeType = '';
+      const androidTypes = [
+        'audio/webm',
+        'audio/mp4',
+        'audio/mpeg'
+      ];
+      
+      for (const type of androidTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          console.log('Android using MIME type:', type);
+          break;
+        }
+      }
+      
+      const recorder = new MediaRecorder(stream, { 
+        mimeType: mimeType,
+        audioBitsPerSecond: 128000  // Higher bitrate for better Android compatibility
+      });
+      mediaRecorder.current = recorder;
+      chunksRef.current = [];
+      startTimeRef.current = Date.now();
+      
+      // Update duration display
+      intervalRef.current = setInterval(() => {
+        if (recording) {
+          setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }
+      }, 100);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          console.log(`Android chunk ${chunksRef.current.length}: ${e.data.size} bytes`);
+        }
+      };
+
+      recorder.onstop = () => {
+        clearInterval(intervalRef.current);
+        const totalDuration = (Date.now() - startTimeRef.current) / 1000;
+        console.log(`Android recording: ${totalDuration}s`);
+        
+        if (chunksRef.current.length === 0) {
+          setStatus('❌ No data captured! Try recording longer.');
+          cleanup();
+          return;
+        }
+        
+        const totalSize = chunksRef.current.reduce((sum, chunk) => sum + chunk.size, 0);
+        console.log(`Total size: ${totalSize} bytes`);
+        
+        if (totalSize < 5000) {
+          setStatus(`❌ Recording too small (${totalSize} bytes). Record at least 2 seconds!`);
+          cleanup();
+          return;
+        }
+        
+        // Create blob with proper type for Android
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        
+        // Test if blob is playable on Android
+        const testUrl = URL.createObjectURL(blob);
+        const testAudio = new Audio(testUrl);
+        
+        testAudio.oncanplaythrough = () => {
+          console.log(`Android audio duration: ${testAudio.duration}s`);
+          URL.revokeObjectURL(testUrl);
+          
+          if (testAudio.duration >= 0.5) {
+            setStatus(`✅ Success! ${totalDuration.toFixed(1)}s recorded`);
+            onSend(blob);
+          } else {
+            setStatus(`⚠️ Audio duration ${testAudio.duration}s - may not play properly`);
+            // Still try to send
+            onSend(blob);
+          }
+          cleanup();
+        };
+        
+        testAudio.onerror = (e) => {
+          console.error('Android audio test failed:', e);
+          setStatus('⚠️ Audio may be corrupted, but trying to send...');
+          // Still attempt to send
+          onSend(blob);
+          cleanup();
+        };
+        
+        // Set a timeout in case metadata never loads
+        setTimeout(() => {
+          URL.revokeObjectURL(testUrl);
+          if (chunksRef.current.length > 0) {
+            setStatus('Sending anyway...');
+            onSend(blob);
+            cleanup();
+          }
+        }, 2000);
+      };
+
+      // Start recording with timeslice (important for Android)
+      recorder.start(1000); // Collect data every second
+      setRecording(true);
+      setStatus('🔴 Recording... (release to send)');
+    } catch (err: any) {
+      console.error('Android microphone error:', err);
+      setStatus(`❌ Mic error: ${err.message}`);
+      alert('Please grant microphone permission in Chrome settings');
+      cleanup();
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
+      try {
+        mediaRecorder.current.stop();
+      } catch (err) {
+        console.error('Stop recording error:', err);
+        cleanup();
+      }
+    }
+  };
+
+  return (
+    <div>
+      <button
+        onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+        onTouchEnd={(e) => { e.preventDefault(); stopRecording(); }}
+        onMouseDown={startRecording}
+        onMouseUp={stopRecording}
+        onMouseLeave={stopRecording}
+        className={`record-btn ${recording ? 'recording' : ''}`}
+      >
+        {recording ? `🔴 Recording... ${duration}s` : '🎤 Hold to Record (Press and hold)'}
+      </button>
+      {status && <div style={{color: '#aaa', fontSize: '0.8rem', marginTop: '0.5rem', textAlign: 'center'}}>{status}</div>}
+    </div>
+  );
+};
+
+// Android-compatible VideoRecorder
+const VideoRecorder = ({ onSend }: { onSend: (blob: Blob) => void }) => {
+  const [recording, setRecording] = useState(false);
+  const [status, setStatus] = useState('');
+  const [duration, setDuration] = useState(0);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const startTimeRef = useRef(0);
+  const intervalRef = useRef<NodeJS.Timeout>();
+
+  const cleanup = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (stream) {
+      stream.getTracks().forEach(t => {
+        if (t.readyState === 'live') t.stop();
+      });
+      setStream(null);
+    }
+    if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+      try { mediaRecorder.current.stop(); } catch(e) {}
+    }
+    mediaRecorder.current = null;
+    chunksRef.current = [];
+    setRecording(false);
+    setDuration(0);
+  };
+
+  const startRecording = async () => {
+    try {
+      setStatus('Requesting camera...');
+      
+      // Android-friendly video constraints
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: 'user'
+        }, 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
+      setStream(mediaStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+      
+      // Android video MIME types
+      let mimeType = '';
+      const androidVideoTypes = ['video/webm', 'video/mp4'];
+      for (const type of androidVideoTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          mimeType = type;
+          console.log('Android using video MIME:', type);
+          break;
+        }
+      }
+      
+      const recorder = new MediaRecorder(mediaStream, { 
+        mimeType: mimeType,
+        videoBitsPerSecond: 500000,  // 0.5 Mbps for better Android compatibility
+        audioBitsPerSecond: 64000
+      });
+      mediaRecorder.current = recorder;
+      chunksRef.current = [];
+      startTimeRef.current = Date.now();
+      
+      intervalRef.current = setInterval(() => {
+        if (recording) {
+          setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }
+      }, 100);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          console.log(`Video chunk ${chunksRef.current.length}: ${e.data.size} bytes`);
+        }
+      };
+
+      recorder.onstop = () => {
+        clearInterval(intervalRef.current);
+        const totalDuration = (Date.now() - startTimeRef.current) / 1000;
+        console.log(`Android video: ${totalDuration}s`);
+        
+        if (chunksRef.current.length === 0) {
+          setStatus('❌ No video captured!');
+          cleanup();
+          return;
+        }
+        
+        const totalSize = chunksRef.current.reduce((sum, chunk) => sum + chunk.size, 0);
+        
+        if (totalSize < 10000) {
+          setStatus(`❌ Video too small (${totalSize} bytes). Record longer!`);
+          cleanup();
+          return;
+        }
+        
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        setStatus(`✅ Video recorded: ${totalDuration.toFixed(1)}s`);
+        onSend(blob);
+        cleanup();
+      };
+
+      recorder.start(1000);
+      setRecording(true);
+      setStatus('🔴 Recording video... (release to send)');
+    } catch (err: any) {
+      console.error('Android camera error:', err);
+      setStatus(`❌ Camera error: ${err.message}`);
+      alert('Please grant camera permission in Chrome settings');
+      cleanup();
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
+      try {
+        mediaRecorder.current.stop();
+      } catch (err) {
+        console.error('Stop video error:', err);
+        cleanup();
+      }
+    }
+  };
+
+  return (
+    <div className="video-recorder">
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        className="preview"
+        style={{ display: stream ? 'block' : 'none' }}
+      />
+      <button
+        onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
+        onTouchEnd={(e) => { e.preventDefault(); stopRecording(); }}
+        onMouseDown={startRecording}
+        onMouseUp={stopRecording}
+        onMouseLeave={stopRecording}
+        className={`record-btn ${recording ? 'recording' : ''}`}
+      >
+        {recording ? `🔴 Recording... ${duration}s` : '📹 Hold to Record Video'}
+      </button>
+      {status && <div style={{color: '#aaa', fontSize: '0.8rem', marginTop: '0.5rem', textAlign: 'center'}}>{status}</div>}
+    </div>
+  );
+};
