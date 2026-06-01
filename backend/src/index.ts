@@ -14,6 +14,7 @@ import { familyRoutes } from './modules/auth/routes';
 import { messageRoutes } from './modules/messages/routes';
 import { authMiddleware } from './middleware/auth';
 import { errorHandler } from './middleware/errorHandler';
+import { initSignaling } from "./core/signaling";
 
 dotenv.config();
 
@@ -74,6 +75,9 @@ app.get('*', (req, res) => {
 app.use(errorHandler);
 
 const PORT = parseInt(process.env.PORT || '3000');
+
+// Initialize WebRTC signaling
+initSignaling(httpServer);
 
 const startServer = async () => {
   await db.waitForReady();

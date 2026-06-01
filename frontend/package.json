@@ -10,9 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "jsqr": "^1.4.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "socket.io-client": "^4.8.3"
+    "react-qr-code": "^2.0.21",
+    "socket.io-client": "^4.8.3",
+    "webrtc-adapter": "^9.0.5"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

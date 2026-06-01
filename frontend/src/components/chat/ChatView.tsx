@@ -24,7 +24,7 @@ export const ChatView: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
         {messages.map(msg => (
           <MessageBubble key={msg.id} message={msg} isOwn={msg.senderId === memberId} />
