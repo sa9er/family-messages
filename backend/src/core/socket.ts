@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { DatabaseManager } from './DatabaseManager';
+import { DatabaseManager } from './database';
 
 interface AuthenticatedSocket extends Socket {
   memberId?: string;
@@ -85,7 +85,7 @@ export class SocketManager {
     if (!socket.memberId || !socket.familyId) return;
     
     const messages = this.db.getMessages(socket.familyId, undefined, 100);
-    const pending = messages.filter(m => 
+    const pending = messages.filter((m: any) => 
       !m.deliveredTo.includes(socket.memberId!) && m.senderId !== socket.memberId
     );
     

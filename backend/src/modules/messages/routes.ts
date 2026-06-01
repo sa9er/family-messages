@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { DatabaseManager } from '../services/DatabaseManager';
-import { MediaService } from '../services/MediaService';
+import { DatabaseManager } from '../../core/database';
+import { MediaService } from './audioProcessor';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 

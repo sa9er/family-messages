@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { DatabaseManager } from '../services/DatabaseManager';
+import { DatabaseManager } from '../../core/database';
 import { randomUUID } from 'crypto';
 import jwt from 'jsonwebtoken';
 

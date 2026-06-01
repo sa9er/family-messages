@@ -7,11 +7,11 @@ import compression from 'compression';
 import dotenv from 'dotenv';
 import * as path from 'path';
 
-import { DatabaseManager } from './services/DatabaseManager';
-import { MediaService } from './services/MediaService';
-import { SocketManager } from './services/SocketManager';
-import { familyRoutes } from './routes/family';
-import { messageRoutes } from './routes/messages';
+import { DatabaseManager } from './core/database';
+import { MediaService } from './modules/messages/audioProcessor';
+import { SocketManager } from './core/socket';
+import { familyRoutes } from './modules/auth/routes';
+import { messageRoutes } from './modules/messages/routes';
 import { authMiddleware } from './middleware/auth';
 import { errorHandler } from './middleware/errorHandler';
 
