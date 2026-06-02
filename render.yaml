@@ -2,7 +2,11 @@ services:
   - type: web
     name: family-messages-api
     runtime: node
+    repo: https://github.com/sa9er/family-messages
     rootDir: backend
-    buildCommand: chmod +x build.sh && ./build.sh
+    buildCommand: npm install && npm run build
     startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
     plan: free
