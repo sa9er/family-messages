@@ -96,3 +96,5 @@ app.get('/media/*', (req, res, next) => {
   res.setHeader('Accept-Ranges', 'bytes');
   next();
 });
+// Serve audio files from uploads directory
+app.use('/media', express.static('uploads/media'));
