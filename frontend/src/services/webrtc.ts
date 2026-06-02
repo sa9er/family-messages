@@ -13,7 +13,7 @@ export class WebRTCService {
     this.onStatusCallback = onStatus;
     this.onStatusCallback('Initializing signaling...');
     
-    this.ws = new WebSocket(`ws://localhost:3000/signal?deviceId=${deviceId}`);
+    this.ws = new WebSocket(`wss://family-messages-api.onrender.com/signal?deviceId=${deviceId}`);
     this.ws.onopen = () => this.onStatusCallback?.('✅ Signaling connected');
     this.ws.onerror = () => this.onStatusCallback?.('❌ Signaling error');
     this.ws.onclose = () => this.onStatusCallback?.('⚠️ Signaling disconnected');
