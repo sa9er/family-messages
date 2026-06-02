@@ -14,6 +14,7 @@ import { familyRoutes } from './modules/auth/routes';
 import { messageRoutes } from './modules/messages/routes';
 import { authMiddleware } from './middleware/auth';
 import { errorHandler } from './middleware/errorHandler';
+import { ensureUploadDirectories } from "./core/storage";
 import { initSignaling } from "./core/signaling";
 
 dotenv.config();
@@ -44,6 +45,7 @@ app.use(helmet({
 }));
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
+app.use(/media, express.static(uploads/media));
 
 // Serve media files with proper headers
 app.use('/media', (req, res, next) => {
@@ -81,6 +83,7 @@ initSignaling(httpServer);
 
 const startServer = async () => {
   await db.waitForReady();
+  ensureUploadDirectories();
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
