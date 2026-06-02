@@ -3,6 +3,6 @@ services:
     name: family-messages-api
     runtime: node
     rootDir: backend
-    buildCommand: npm install && npm run build
+    buildCommand: chmod +x build.sh && ./build.sh
     startCommand: npm start
     plan: free
