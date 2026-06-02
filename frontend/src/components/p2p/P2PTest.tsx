@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDeviceId } from '../../hooks/useDeviceId';
 
 export const P2PTest: React.FC = () => {

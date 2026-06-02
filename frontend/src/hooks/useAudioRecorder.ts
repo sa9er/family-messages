@@ -4,6 +4,7 @@ export const useAudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const onCompleteRef = useRef<(blob: Blob) => Promise<void>>();
 
   const start = async () => {
     chunksRef.current = [];
@@ -27,7 +28,6 @@ export const useAudioRecorder = () => {
     }
   };
 
-  const onCompleteRef = useRef<(blob: Blob) => Promise<void>>();
   const setOnComplete = (fn: (blob: Blob) => Promise<void>) => { onCompleteRef.current = fn; };
 
   return { isRecording, start, stop, setOnComplete };

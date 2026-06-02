@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDeviceId } from '../../hooks/useDeviceId';
 import { WebRTCService } from '../../services/webrtc';
 

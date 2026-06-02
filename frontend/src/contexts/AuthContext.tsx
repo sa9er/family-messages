@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { FamilyData } from '../types';
 
 interface AuthContextType extends Partial<FamilyData> {
@@ -8,7 +8,7 @@ interface AuthContextType extends Partial<FamilyData> {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [familyId, setFamilyId] = useState<string>();
   const [memberId, setMemberId] = useState<string>();
   const [token, setToken] = useState<string>();

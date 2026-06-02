@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useDeviceId } from '../../hooks/useDeviceId';
 import { QRDisplay } from './QRDisplay';
 import { QRScanner } from './QRScanner';

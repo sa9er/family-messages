@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useMessages } from '../../hooks/useMessages';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { useAuth } from '../../contexts/AuthContext';
