@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fixed Recording Test - Poco X7 Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { padding: 20px; font-family: sans-serif; background: #1a1a2e; color: white; }
+        button { padding: 20px; font-size: 18px; margin: 10px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; width: 100%; max-width: 300px; }
+        .recording { background-color: #e94560 !important; }
+        .status { margin: 20px 0; padding: 15px; background: #16213e; border-radius: 8px; word-break: break-word; }
+        audio { width: 100%; margin: 20px 0; }
+        .success { color: #4CAF50; }
+        .error { color: #e94560; }
+        .info { color: #667eea; }
+        .debug { font-size: 12px; color: #888; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h2>🎤 Fixed Audio Recording Test</h2>
+    <button id="recordBtn">🎙️ Hold to Record</button>
+    <div class="status" id="status">Ready</div>
+    <div id="duration" class="info">0 seconds</div>
+    <div id="filesize"></div>
+    <div id="debug" class="debug"></div>
+    <audio id="audioPlayer" controls style="width: 100%;"></audio>
+    
+    <script>
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let stream = null;
+        let startTime = null;
+        let timerInterval = null;
+        
+        const recordBtn = document.getElementById('recordBtn');
+        const statusDiv = document.getElementById('status');
+        const durationDiv = document.getElementById('duration');
+        const filesizeDiv = document.getElementById('filesize');
+        const debugDiv = document.getElementById('debug');
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Handle touch events for mobile
+        recordBtn.addEventListener('touchstart', startRecording);
+        recordBtn.addEventListener('touchend', stopRecording);
+        recordBtn.addEventListener('touchcancel', stopRecording);
+        
+        // Also handle mouse for debugging
+        recordBtn.addEventListener('mousedown', startRecording);
+        recordBtn.addEventListener('mouseup', stopRecording);
+        recordBtn.addEventListener('mouseleave', stopRecording);
+        
+        async function startRecording(e) {
+            e.preventDefault();
+            
+            try {
+                statusDiv.innerHTML = '🎤 Requesting microphone...';
+                debugDiv.innerHTML = '';
+                
+                // Request audio with specific constraints for Xiaomi/Poco
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 48000,
+                        channelCount: 2,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                });
+                
+                debugDiv.innerHTML = `✅ Stream obtained: ${stream.getAudioTracks().length} audio tracks`;
+                statusDiv.innerHTML = '✅ Microphone ready. Starting recording...';
+                
+                // Try different MIME types in order of preference
+                const mimeTypes = [
+                    'audio/webm;codecs=opus',
+                    'audio/webm',
+                    'audio/mp4;codecs=mp4a',
+                    'audio/mp4',
+                    'audio/wav'
+                ];
+                
+                let mimeType = '';
+                for (const type of mimeTypes) {
+                    if (MediaRecorder.isTypeSupported(type)) {
+                        mimeType = type;
+                        debugDiv.innerHTML += `<br>✅ Using MIME type: ${type}`;
+                        break;
+                    }
+                }
+                
+                if (!mimeType) {
+                    throw new Error('No supported MIME type found');
+                }
+                
+                // Create recorder with higher bitrate
+                mediaRecorder = new MediaRecorder(stream, { 
+                    mimeType: mimeType,
+                    audioBitsPerSecond: 256000  // Higher bitrate for better quality
+                });
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        debugDiv.innerHTML += `<br>📦 Chunk: ${(event.data.size/1024).toFixed(1)} KB`;
+                    }
+                };
+                
+                mediaRecorder.onerror = (event) => {
+                    console.error('Recorder error:', event);
+                    statusDiv.innerHTML = '❌ Recording error!';
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const duration = (Date.now() - startTime) / 1000;
+                    const totalSize = audioChunks.reduce((sum, chunk) => sum + chunk.size, 0);
+                    
+                    durationDiv.innerHTML = `⏱️ ${duration.toFixed(1)} seconds`;
+                    filesizeDiv.innerHTML = `📦 Total: ${(totalSize/1024).toFixed(1)} KB (${totalSize} bytes)`;
+                    
+                    debugDiv.innerHTML += `<br>📊 Total chunks: ${audioChunks.length}`;
+                    
+                    if (totalSize < 5000) {
+                        statusDiv.innerHTML = '❌ Recording too small - try recording longer (5+ seconds)';
+                        statusDiv.className = 'status error';
+                        return;
+                    }
+                    
+                    // Create blob
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    audioPlayer.src = audioUrl;
+                    
+                    statusDiv.innerHTML = `✅ Recording saved! ${(totalSize/1024).toFixed(1)} KB`;
+                    statusDiv.className = 'status success';
+                    
+                    // Try to play
+                    audioPlayer.onloadedmetadata = () => {
+                        debugDiv.innerHTML += `<br>✅ Playable! Duration: ${audioPlayer.duration.toFixed(1)}s`;
+                        if (audioPlayer.duration < 0.5) {
+                            statusDiv.innerHTML = '⚠️ Recording may be corrupted (duration too short)';
+                        }
+                    };
+                    
+                    audioPlayer.onerror = (err) => {
+                        debugDiv.innerHTML += `<br>❌ Playback error: ${err.target.error?.message || 'Unknown error'}`;
+                        statusDiv.innerHTML = '❌ Recording corrupted - file format issue';
+                    };
+                    
+                    // Clean up stream
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                        stream = null;
+                    }
+                    recordBtn.classList.remove('recording');
+                };
+                
+                // Start recording with timeslice
+                mediaRecorder.start(1000);
+                startTime = Date.now();
+                recordBtn.classList.add('recording');
+                statusDiv.innerHTML = '🔴 RECORDING... Release to stop';
+                
+                // Update timer
+                timerInterval = setInterval(() => {
+                    if (startTime) {
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        durationDiv.innerHTML = `${elapsed.toFixed(1)} seconds`;
+                        // Show expected file size based on bitrate
+                        const expectedSize = (elapsed * 256000) / 8;
+                        filesizeDiv.innerHTML = `Expected ~${(expectedSize/1024).toFixed(0)} KB`;
+                    }
+                }, 100);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `❌ Error: ${error.message}`;
+                statusDiv.className = 'status error';
+                debugDiv.innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        function stopRecording(e) {
+            e.preventDefault();
+            
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                if (timerInterval) clearInterval(timerInterval);
+                statusDiv.innerHTML = '⏳ Processing...';
+            }
+        }
+    </script>
+</body>
+</html>

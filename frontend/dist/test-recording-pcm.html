@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PCM Recording Test - Works on Poco X7 Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { padding: 20px; font-family: sans-serif; background: #1a1a2e; color: white; }
+        button { padding: 20px; font-size: 18px; margin: 10px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; width: 100%; max-width: 300px; }
+        .recording { background-color: #e94560 !important; }
+        .status { margin: 20px 0; padding: 15px; background: #16213e; border-radius: 8px; }
+        audio { width: 100%; margin: 20px 0; }
+        .success { color: #4CAF50; }
+        .error { color: #e94560; }
+    </style>
+</head>
+<body>
+    <h2>🎵 PCM Recording Test (Works on Poco X7 Pro)</h2>
+    <button id="recordBtn">Hold to Record</button>
+    <div class="status" id="status">Ready - Press and hold</div>
+    <div id="duration">0 seconds</div>
+    <div id="filesize"></div>
+    <audio id="audioPlayer" controls></audio>
+    
+    <script>
+        let audioContext;
+        let mediaStream;
+        let sourceNode;
+        let processorNode;
+        let audioChunks = [];
+        let startTime;
+        let timerInterval;
+        
+        const recordBtn = document.getElementById('recordBtn');
+        const statusDiv = document.getElementById('status');
+        const durationDiv = document.getElementById('duration');
+        const filesizeDiv = document.getElementById('filesize');
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Handle both touch and mouse
+        recordBtn.addEventListener('touchstart', startRecording);
+        recordBtn.addEventListener('touchend', stopRecording);
+        recordBtn.addEventListener('touchcancel', stopRecording);
+        recordBtn.addEventListener('mousedown', startRecording);
+        recordBtn.addEventListener('mouseup', stopRecording);
+        recordBtn.addEventListener('mouseleave', stopRecording);
+        
+        async function startRecording(e) {
+            e.preventDefault();
+            
+            try {
+                statusDiv.innerHTML = '🎤 Requesting microphone...';
+                audioChunks = [];
+                
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                audioContext = new AudioCtx();
+                
+                sourceNode = audioContext.createMediaStreamSource(mediaStream);
+                processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+                
+                processorNode.onaudioprocess = (event) => {
+                    const inputData = event.inputBuffer.getChannelData(0);
+                    // Convert float32 to int16
+                    const int16Data = new Int16Array(inputData.length);
+                    for (let i = 0; i < inputData.length; i++) {
+                        int16Data[i] = Math.max(-32768, Math.min(32767, Math.floor(inputData[i] * 32768)));
+                    }
+                    audioChunks.push(int16Data);
+                };
+                
+                sourceNode.connect(processorNode);
+                processorNode.connect(audioContext.destination);
+                
+                startTime = Date.now();
+                recordBtn.classList.add('recording');
+                statusDiv.innerHTML = '🔴 RECORDING... Release to stop';
+                
+                timerInterval = setInterval(() => {
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    durationDiv.innerHTML = `${elapsed.toFixed(1)} seconds`;
+                }, 100);
+                
+            } catch (err) {
+                console.error('Error:', err);
+                statusDiv.innerHTML = `❌ Error: ${err.message}`;
+                statusDiv.className = 'status error';
+            }
+        }
+        
+        function createWavBlob(samples, sampleRate) {
+            const numChannels = 1;
+            const bitsPerSample = 16;
+            const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+            const blockAlign = numChannels * bitsPerSample / 8;
+            const dataSize = samples.length * 2;
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+            
+            function writeString(offset, str) {
+                for (let i = 0; i < str.length; i++) {
+                    view.setUint8(offset + i, str.charCodeAt(i));
+                }
+            }
+            
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + dataSize, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, byteRate, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, bitsPerSample, true);
+            writeString(36, 'data');
+            view.setUint32(40, dataSize, true);
+            
+            // Write audio samples
+            for (let i = 0; i < samples.length; i++) {
+                view.setInt16(44 + i * 2, samples[i], true);
+            }
+            
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+        
+        function stopRecording(e) {
+            e.preventDefault();
+            
+            if (!mediaStream) return;
+            
+            const duration = (Date.now() - startTime) / 1000;
+            clearInterval(timerInterval);
+            
+            statusDiv.innerHTML = '⏳ Processing...';
+            
+            // Combine all chunks
+            const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+            const combinedBuffer = new Int16Array(totalLength);
+            let offset = 0;
+            for (const chunk of audioChunks) {
+                combinedBuffer.set(chunk, offset);
+                offset += chunk.length;
+            }
+            
+            // Create WAV blob
+            const sampleRate = audioContext.sampleRate;
+            const wavBlob = createWavBlob(combinedBuffer, sampleRate);
+            const totalSize = wavBlob.size;
+            
+            durationDiv.innerHTML = `${duration.toFixed(1)} seconds`;
+            filesizeDiv.innerHTML = `📦 File size: ${(totalSize/1024).toFixed(1)} KB (${totalSize} bytes)`;
+            
+            if (totalSize < 5000) {
+                statusDiv.innerHTML = '❌ Recording too short - try recording longer';
+                statusDiv.className = 'status error';
+            } else {
+                const url = URL.createObjectURL(wavBlob);
+                audioPlayer.src = url;
+                statusDiv.innerHTML = `✅ Recording saved! ${(totalSize/1024).toFixed(1)} KB`;
+                statusDiv.className = 'status success';
+                
+                audioPlayer.oncanplay = () => {
+                    console.log('Audio duration:', audioPlayer.duration);
+                };
+            }
+            
+            // Cleanup
+            if (processorNode) processorNode.disconnect();
+            if (sourceNode) sourceNode.disconnect();
+            if (audioContext) audioContext.close();
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            
+            recordBtn.classList.remove('recording');
+        }
+    </script>
+</body>
+</html>

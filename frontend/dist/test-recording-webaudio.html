@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Audio API Recording - Poco X7 Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { padding: 20px; font-family: sans-serif; background: #1a1a2e; color: white; }
+        button { padding: 20px; font-size: 18px; margin: 10px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        .recording { background-color: #e94560 !important; }
+        .status { margin: 20px 0; padding: 15px; background: #16213e; border-radius: 8px; }
+        audio { width: 100%; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h2>🎵 Web Audio API Recording (Better for Xiaomi)</h2>
+    <button id="recordBtn">Hold to Record</button>
+    <div class="status" id="status">Ready</div>
+    <div id="duration">0 seconds</div>
+    <audio id="audioPlayer" controls></audio>
+    
+    <script>
+        let mediaStream = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let startTime = null;
+        let timerInterval = null;
+        
+        const recordBtn = document.getElementById('recordBtn');
+        const statusDiv = document.getElementById('status');
+        const durationDiv = document.getElementById('duration');
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        recordBtn.addEventListener('touchstart', startRecording);
+        recordBtn.addEventListener('touchend', stopRecording);
+        recordBtn.addEventListener('mousedown', startRecording);
+        recordBtn.addEventListener('mouseup', stopRecording);
+        
+        async function startRecording(e) {
+            e.preventDefault();
+            
+            try {
+                // Request audio with minimal constraints
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Use the simplest possible configuration
+                const options = {
+                    mimeType: 'audio/webm'
+                };
+                
+                mediaRecorder = new MediaRecorder(mediaStream, options);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    const duration = (Date.now() - startTime) / 1000;
+                    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const url = URL.createObjectURL(blob);
+                    audioPlayer.src = url;
+                    
+                    durationDiv.innerHTML = `${duration.toFixed(1)} seconds, ${(blob.size/1024).toFixed(1)} KB`;
+                    statusDiv.innerHTML = blob.size > 5000 ? '✅ Recording saved!' : '❌ Recording too small';
+                    
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    recordBtn.classList.remove('recording');
+                };
+                
+                mediaRecorder.start(100);
+                startTime = Date.now();
+                recordBtn.classList.add('recording');
+                statusDiv.innerHTML = '🔴 Recording...';
+                
+                timerInterval = setInterval(() => {
+                    if (startTime) {
+                        durationDiv.innerHTML = `${(Date.now() - startTime) / 1000} seconds`;
+                    }
+                }, 100);
+                
+            } catch (err) {
+                statusDiv.innerHTML = `Error: ${err.message}`;
+            }
+        }
+        
+        function stopRecording(e) {
+            e.preventDefault();
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                clearInterval(timerInterval);
+                statusDiv.innerHTML = 'Processing...';
+            }
+        }
+    </script>
+</body>
+</html>

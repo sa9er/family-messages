@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Recording Test - Poco X7 Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { padding: 20px; font-family: sans-serif; background: #1a1a2e; color: white; }
+        button { padding: 20px; font-size: 18px; margin: 10px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        .recording { background-color: #e94560 !important; }
+        .status { margin: 20px 0; padding: 15px; background: #16213e; border-radius: 8px; }
+        audio { width: 100%; margin: 20px 0; }
+        .success { color: #4CAF50; }
+        .error { color: #e94560; }
+        .info { color: #667eea; }
+    </style>
+</head>
+<body>
+    <h2>🎤 Audio Recording Test - Poco X7 Pro</h2>
+    <button id="recordBtn">Hold to Record</button>
+    <div class="status" id="status">Ready - Press and hold button</div>
+    <div id="duration" class="info">0 seconds</div>
+    <div id="filesize"></div>
+    <audio id="audioPlayer" controls style="width: 100%;"></audio>
+    <div id="playbackStatus"></div>
+    
+    <script>
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let stream = null;
+        let startTime = null;
+        let timerInterval = null;
+        
+        const recordBtn = document.getElementById('recordBtn');
+        const statusDiv = document.getElementById('status');
+        const durationDiv = document.getElementById('duration');
+        const filesizeDiv = document.getElementById('filesize');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const playbackStatus = document.getElementById('playbackStatus');
+        
+        recordBtn.addEventListener('mousedown', startRecording);
+        recordBtn.addEventListener('mouseup', stopRecording);
+        recordBtn.addEventListener('mouseleave', stopRecording);
+        recordBtn.addEventListener('touchstart', startRecording);
+        recordBtn.addEventListener('touchend', stopRecording);
+        
+        async function startRecording(e) {
+            e.preventDefault();
+            
+            try {
+                statusDiv.innerHTML = '🎤 Requesting microphone permission...';
+                statusDiv.className = 'status';
+                
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                statusDiv.innerHTML = '✅ Microphone granted. Starting recording...';
+                
+                // Use the most compatible MIME type
+                let mimeType = 'audio/webm';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'audio/mp4';
+                }
+                
+                console.log('Using MIME type:', mimeType);
+                
+                mediaRecorder = new MediaRecorder(stream, { mimeType });
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        console.log('Chunk size:', event.data.size);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const duration = (Date.now() - startTime) / 1000;
+                    const totalSize = audioChunks.reduce((sum, chunk) => sum + chunk.size, 0);
+                    
+                    durationDiv.innerHTML = `⏱️ ${duration.toFixed(1)} seconds recorded`;
+                    filesizeDiv.innerHTML = `📦 File size: ${(totalSize/1024).toFixed(1)} KB (${totalSize} bytes)`;
+                    
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    audioPlayer.src = audioUrl;
+                    
+                    // Try to play and verify
+                    audioPlayer.onloadedmetadata = () => {
+                        playbackStatus.innerHTML = `✅ Playback ready! Duration: ${audioPlayer.duration.toFixed(1)} seconds`;
+                        playbackStatus.className = 'success';
+                        console.log('Audio duration:', audioPlayer.duration);
+                    };
+                    
+                    audioPlayer.onerror = (e) => {
+                        playbackStatus.innerHTML = '❌ Playback failed! Recording is corrupted. Try recording longer (2+ seconds).';
+                        playbackStatus.className = 'error';
+                        console.error('Audio error:', e);
+                    };
+                    
+                    statusDiv.innerHTML = `✅ Recording saved! ${(totalSize/1024).toFixed(1)} KB`;
+                    statusDiv.className = 'status success';
+                    
+                    // Clean up
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                        stream = null;
+                    }
+                    recordBtn.classList.remove('recording');
+                };
+                
+                mediaRecorder.start(100);
+                startTime = Date.now();
+                recordBtn.classList.add('recording');
+                statusDiv.innerHTML = '🔴 RECORDING... Release button to stop';
+                statusDiv.className = 'status';
+                
+                timerInterval = setInterval(() => {
+                    if (startTime) {
+                        const elapsed = (Date.now() - startTime) / 1000;
+                        durationDiv.innerHTML = `${elapsed.toFixed(1)} seconds`;
+                    }
+                }, 100);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `❌ Error: ${error.message}. Please grant microphone permission.`;
+                statusDiv.className = 'status error';
+                recordBtn.classList.remove('recording');
+            }
+        }
+        
+        function stopRecording(e) {
+            e.preventDefault();
+            
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                if (timerInterval) clearInterval(timerInterval);
+                statusDiv.innerHTML = '⏳ Processing recording...';
+            }
+        }
+    </script>
+</body>
+</html>
