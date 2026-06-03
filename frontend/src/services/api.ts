@@ -1,4 +1,4 @@
-const API_URL = 'https://family-messages-api.onrender.com';
+const API_URL = "https://family-messages-api.onrender.com";
 
 export const api = {
   async request(endpoint: string, options?: RequestInit) {
